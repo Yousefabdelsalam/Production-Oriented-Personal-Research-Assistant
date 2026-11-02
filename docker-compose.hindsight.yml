@@ -1,0 +1,75 @@
+# Dedicated Hindsight deployment for Personal Research Assistant.
+#
+# Fully independent of any other project's Hindsight (e.g. SelfLearningAgent): its own Compose project, network, volumes,
+# containers, database and host ports. Nothing here references another project's resources.
+#
+# Always pass the env file explicitly (it also stops Compose from auto-loading the application's .env):
+#   docker compose --env-file .env.hindsight -f docker-compose.hindsight.yml up -d
+# See docs/hindsight-deployment.md.
+
+name: pra-hindsight   # Compose project name; resources below are additionally given explicit pra_* names
+
+services:
+  pra-hindsight-db:
+    image: pgvector/pgvector:pg17          # PostgreSQL 17 + pgvector (Hindsight runs `CREATE EXTENSION vector` itself)
+    container_name: pra-hindsight-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: hindsight             # superuser of THIS private instance (needed for CREATE EXTENSION)
+      POSTGRES_PASSWORD: ${PRA_HINDSIGHT_DB_PASSWORD:?set PRA_HINDSIGHT_DB_PASSWORD in .env.hindsight}
+      POSTGRES_DB: hindsight
+    volumes:
+      - pra_hindsight_pg_data:/var/lib/postgresql/data
+    networks: [pra_hindsight_net]
+    # No `ports:` on purpose: the database is reachable only from containers on pra_hindsight_net.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hindsight -d hindsight"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+
+  pra-hindsight:
+    image: ghcr.io/vectorize-io/hindsight:${PRA_HINDSIGHT_VERSION:-0.10.2}   # pinned: matches hindsight-client==0.10.2
+    container_name: pra-hindsight
+    restart: unless-stopped
+    depends_on:
+      pra-hindsight-db:
+        condition: service_healthy
+    environment:
+      HINDSIGHT_API_DATABASE_URL: postgresql://hindsight:${PRA_HINDSIGHT_DB_PASSWORD:?set PRA_HINDSIGHT_DB_PASSWORD in .env.hindsight}@pra-hindsight-db:5432/hindsight
+      # Hindsight's OWN LLM (fact extraction on retain, reflect, consolidation). Retain/reflect/consolidation LLMs fall back to these.
+      HINDSIGHT_API_LLM_PROVIDER: ${HINDSIGHT_API_LLM_PROVIDER:-openai}
+      HINDSIGHT_API_LLM_MODEL: ${HINDSIGHT_API_LLM_MODEL:-gpt-5-mini}
+      HINDSIGHT_API_LLM_API_KEY: ${HINDSIGHT_API_LLM_API_KEY:-}
+      HINDSIGHT_API_SKIP_LLM_VERIFICATION: ${HINDSIGHT_API_SKIP_LLM_VERIFICATION:-false}
+      HINDSIGHT_API_LOG_LEVEL: ${HINDSIGHT_API_LOG_LEVEL:-info}
+    ports:
+      - "127.0.0.1:${PRA_HINDSIGHT_API_PORT:-8890}:8888"   # REST API  -> http://127.0.0.1:8890
+      - "127.0.0.1:${PRA_HINDSIGHT_UI_PORT:-9990}:9999"    # control plane UI -> http://127.0.0.1:9990
+    volumes:
+      - pra_hindsight_models:/home/hindsight/.cache        # downloaded embedding/reranker models (re-downloadable cache)
+    networks: [pra_hindsight_net]
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request;urllib.request.urlopen('http://localhost:8888/health/ready')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 60
+      start_period: 120s                                   # first start downloads models
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+
+networks:
+  pra_hindsight_net:
+    name: pra_hindsight_net
+    driver: bridge
+
+volumes:
+  pra_hindsight_pg_data:
+    name: pra_hindsight_pg_data      # THE data: every memory lives here. Back it up (docs/hindsight-deployment.md).
+  pra_hindsight_models:
+    name: pra_hindsight_models       # cache only

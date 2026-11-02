@@ -1,0 +1,30 @@
+# Secrets: never commit. Only the *.example templates (placeholders) are tracked.
+.env
+.env.*
+!.env.example
+!.env.hindsight.example
+*.pem
+*.key
+
+# Local data (databases, uploaded originals, Hindsight backups)
+data/
+backend/data/
+backups/
+
+# Tooling / build output
+.venv/
+.tools/
+node_modules/
+frontend/dist/
+__pycache__/
+*.pyc
+.pytest_cache/
+.vite/
+*.log
+data_eval_live_output.txt
+
+# AI-assistant files (local working notes, not part of the project)
+CLAUDE.md
+.claude/
+claude-progress.md
+feature_list.json
