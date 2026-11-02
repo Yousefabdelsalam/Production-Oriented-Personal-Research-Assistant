@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+
 # Production-Oriented Personal Research Assistant
 
 A research workspace app. Add PDFs, web pages and your own notes to topic workspaces, and the system:
@@ -158,5 +158,4 @@ Secrets are read only from the environment and are never logged or stored in Hin
 | [docs/evaluation.md](docs/evaluation.md) | Evaluation dataset, metrics and gates |
 | [docs/hindsight-deployment.md](docs/hindsight-deployment.md) | Running and operating the Hindsight stack |
 =======
-# Production-Oriented-Personal-Research-Assistant
->>>>>>> e52405d423a7ab653628e65db449af60fdd1062f
+
